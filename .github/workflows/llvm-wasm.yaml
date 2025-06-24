@@ -55,4 +55,4 @@ jobs:
         with:
           name: llvm-wasm-${{ steps.llvm_commit.outputs.LLVM_COMMIT }}
           path: |
-            llvm-project/llvm/build/bin
+            llvm-project/build/bin
