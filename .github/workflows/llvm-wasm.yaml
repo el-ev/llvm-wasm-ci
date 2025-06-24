@@ -1,0 +1,58 @@
+name: llvm-wasm
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull repositories
+        run: |
+          git clone --depth 1 https://github.com/llvm/llvm-project.git
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git
+      
+      - name: Set up Emscripten
+        run: |
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+
+      - name: Build LLVM
+        run: |
+          cd llvm-project
+          source ../emsdk/emsdk_env.sh
+          LDFLAGS="-s NO_INVOKE_RUN -s EXIT_RUNTIME -s INITIAL_MEMORY=64MB -s ALLOW_MEMORY_GROWTH -s WASM_BIGINT=1 -s MODULARIZE=1 -s EXPORT_ES6" \
+          emcmake cmake -G Ninja -S llvm -B build        \
+            -DCMAKE_BUILD_TYPE=Release                   \
+            -DLLVM_TARGET_ARCH=wasm32-emscripten         \
+            -DLLVM_DEFAULT_TARGET_TRIPLE=wasm32-wasi     \
+            -DLLVM_HOST_TRIPLE=wasm32-unknown-emscripten \
+            -DLLVM_TARGETS_TO_BUILD="WebAssembly"        \
+            -DLLVM_INCLUDE_TESTS=OFF                     \
+            -DLLVM_INCLUDE_EXAMPLES=OFF                  \
+            -DLLVM_INCLUDE_BENCHMARKS=OFF                \
+            -DLLVM_ENABLE_PROJECTS="clang;lld;llvm"      \
+            -DLLVM_ENABLE_THREADS=OFF
+          cmake --build build
+        
+      - name: Read LLVM commit
+        id: llvm_commit
+        run: |
+          cd llvm-project
+          echo "LLVM_COMMIT=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm-wasm-${{ steps.llvm_commit.outputs.LLVM_COMMIT }}
+          path: |
+            llvm-project/llvm/build/bin
